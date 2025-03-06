@@ -25,7 +25,7 @@ def upload_pdf_to_mistral(file):
         return uploaded_pdf.id
     except Exception as e:
         st.error(f"Erreur lors de l'upload: {e}")
-        return None
+        st.stop()  # Arrêter l'exécution en cas d'erreur
 
 # Fonction pour obtenir une URL signée pour le fichier uploadé
 def get_signed_url(file_id):
@@ -34,7 +34,7 @@ def get_signed_url(file_id):
         return signed_url.url
     except Exception as e:
         st.error(f"Erreur lors de la récupération de l'URL signée: {e}")
-        return None
+        st.stop()  # Arrêter l'exécution en cas d'erreur
 
 # Fonction pour appeler l'API OCR avec l'URL signée
 def call_ocr_api(signed_url, model="mistral-ocr-latest"):
@@ -50,7 +50,7 @@ def call_ocr_api(signed_url, model="mistral-ocr-latest"):
         return ocr_response
     except Exception as e:
         st.error(f"Erreur API: {e}")
-        return None
+        st.stop()  # Arrêter l'exécution en cas d'erreur
 
 # Interface Streamlit
 st.title("OCR Extracteur de Texte avec Mistral AI")
@@ -88,7 +88,7 @@ if uploaded_file:
                     full_text = "\n".join(pages_text)
                 except AttributeError:
                     st.error("Erreur : L'attribut 'pages' est introuvable dans la réponse.")
-                    return
+                    st.stop()  # Arrêter l'exécution proprement
                 
                 # Affichage du texte extrait
                 st.subheader("Texte extrait")
