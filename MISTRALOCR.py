@@ -78,8 +78,8 @@ if uploaded_file:
             ocr_result = call_ocr_api(signed_url)
 
             if ocr_result:
-                # Extraction du texte des pages
-                pages_text = [page.get("text", "") for page in ocr_result.get("pages", [])]
+                # Extraction du texte des pages avec attributs
+                pages_text = [page.text for page in ocr_result.pages]
                 full_text = "\n".join(pages_text)
                 
                 # Affichage du texte extrait
