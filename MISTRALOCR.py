@@ -14,18 +14,17 @@ client = Mistral(api_key=API_KEY)
 # Fonction pour uploader le fichier PDF directement via l'API Mistral
 def upload_pdf_to_mistral(file):
     try:
-        # Upload du fichier PDF
         uploaded_pdf = client.files.upload(
             file={
                 "file_name": file.name,
-                "content": file.read(),  # Lecture du fichier en binaire
+                "content": file.read(),
             },
             purpose="ocr"
         )
         return uploaded_pdf.id
     except Exception as e:
         st.error(f"Erreur lors de l'upload: {e}")
-        st.stop()  # Arrêter l'exécution en cas d'erreur
+        st.stop()
 
 # Fonction pour obtenir une URL signée pour le fichier uploadé
 def get_signed_url(file_id):
@@ -34,7 +33,7 @@ def get_signed_url(file_id):
         return signed_url.url
     except Exception as e:
         st.error(f"Erreur lors de la récupération de l'URL signée: {e}")
-        st.stop()  # Arrêter l'exécution en cas d'erreur
+        st.stop()
 
 # Fonction pour appeler l'API OCR avec l'URL signée
 def call_ocr_api(signed_url, model="mistral-ocr-latest"):
@@ -45,12 +44,12 @@ def call_ocr_api(signed_url, model="mistral-ocr-latest"):
                 "type": "document_url",
                 "document_url": signed_url,
             },
-            include_image_base64=False  # Pas d'images pour le moment
+            include_image_base64=False
         )
         return ocr_response
     except Exception as e:
         st.error(f"Erreur API: {e}")
-        st.stop()  # Arrêter l'exécution en cas d'erreur
+        st.stop()
 
 # Interface Streamlit
 st.title("OCR Extracteur de Texte avec Mistral AI")
@@ -62,19 +61,14 @@ if uploaded_file:
     st.write(f"Fichier uploadé: {uploaded_file.name}")
     st.info("Upload du fichier en cours...")
 
-    # 1. Upload du fichier PDF via l'API Mistral
     file_id = upload_pdf_to_mistral(uploaded_file)
 
     if file_id:
         st.success(f"Fichier uploadé avec succès. ID: {file_id}")
-        
-        # 2. Obtenir une URL signée pour le fichier
         signed_url = get_signed_url(file_id)
 
         if signed_url:
             st.success("URL signée obtenue avec succès.")
-            
-            # 3. Appel à l'API OCR avec l'URL signée
             ocr_result = call_ocr_api(signed_url)
 
             # ➡️ Afficher le type et le contenu brut de la réponse pour déboguer
@@ -83,17 +77,25 @@ if uploaded_file:
 
             if ocr_result:
                 try:
-                    # Extraction du texte des pages avec attributs
-                    pages_text = [page.text for page in ocr_result.pages]
+                    # 🔄 Utiliser .dict() pour convertir en dictionnaire si nécessaire
+                    if hasattr(ocr_result, "pages"):
+                        # Extraire le texte en Markdown depuis chaque page
+                        pages_text = [page.markdown for page in ocr_result.pages]
+                    else:
+                        # Si .pages échoue, essayer d'accéder via .dict()
+                        ocr_result_dict = ocr_result.dict()
+                        pages_text = [page["markdown"] for page in ocr_result_dict.get("pages", [])]
+
                     full_text = "\n".join(pages_text)
+
                 except AttributeError:
-                    st.error("Erreur : L'attribut 'pages' est introuvable dans la réponse.")
-                    st.stop()  # Arrêter l'exécution proprement
-                
+                    st.error("Erreur : Impossible d'accéder à l'attribut 'pages'.")
+                    st.stop()
+
                 # Affichage du texte extrait
                 st.subheader("Texte extrait")
                 st.text_area("", full_text, height=300)
-                
+
                 # Téléchargement au format TXT
                 txt_bytes = BytesIO(full_text.encode("utf-8"))
                 st.download_button(
@@ -102,7 +104,7 @@ if uploaded_file:
                     file_name=f"{uploaded_file.name.split('.')[0]}.txt",
                     mime="text/plain"
                 )
-                
+
                 # Téléchargement au format CSV
                 df = pd.DataFrame({"Texte": pages_text})
                 csv_bytes = df.to_csv(index=False).encode("utf-8")
