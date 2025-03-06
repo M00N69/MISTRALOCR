@@ -2,34 +2,54 @@ import streamlit as st
 import requests
 import pandas as pd
 from io import BytesIO
-import base64
+from mistralai import Mistral
+import os
 
 # Configuration de la clé API
 API_KEY = st.secrets["API_KEY"]
-API_URL = "https://api.mistral.ai/v1/ocr"
 
-# Fonction pour encoder le fichier PDF en Base64
-def encode_file_to_base64(file):
-    return base64.b64encode(file.read()).decode('utf-8')
+# Initialiser le client Mistral
+client = Mistral(api_key=API_KEY)
 
-# Fonction pour appeler l'API OCR avec fichier en Base64
-def call_ocr_api_with_base64(file_base64, file_name, model="default"):
-    headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
-    payload = {
-        "model": model,
-        "document": {
-            "type": "document_base64",
-            "document_base64": file_base64,
-            "document_name": file_name
-        },
-        "include_image_base64": False
-    }
+# Fonction pour uploader le fichier PDF directement via l'API Mistral
+def upload_pdf_to_mistral(file):
+    try:
+        # Upload du fichier PDF
+        uploaded_pdf = client.files.upload(
+            file={
+                "file_name": file.name,
+                "content": file.read(),  # Lecture du fichier en binaire
+            },
+            purpose="ocr"
+        )
+        return uploaded_pdf.id
+    except Exception as e:
+        st.error(f"Erreur lors de l'upload: {e}")
+        return None
 
-    response = requests.post(API_URL, json=payload, headers=headers)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        st.error(f"Erreur API: {response.status_code} - {response.text}")
+# Fonction pour obtenir une URL signée pour le fichier uploadé
+def get_signed_url(file_id):
+    try:
+        signed_url = client.files.get_signed_url(file_id=file_id)
+        return signed_url.url
+    except Exception as e:
+        st.error(f"Erreur lors de la récupération de l'URL signée: {e}")
+        return None
+
+# Fonction pour appeler l'API OCR avec l'URL signée
+def call_ocr_api(signed_url, model="mistral-ocr-latest"):
+    try:
+        ocr_response = client.ocr.process(
+            model=model,
+            document={
+                "type": "document_url",
+                "document_url": signed_url,
+            },
+            include_image_base64=False  # Pas d'images pour le moment
+        )
+        return ocr_response
+    except Exception as e:
+        st.error(f"Erreur API: {e}")
         return None
 
 # Interface Streamlit
@@ -40,40 +60,49 @@ uploaded_file = st.file_uploader("Choisissez un fichier PDF", type=["pdf"])
 
 if uploaded_file:
     st.write(f"Fichier uploadé: {uploaded_file.name}")
-    st.info("Traitement du fichier en cours...")
+    st.info("Upload du fichier en cours...")
 
-    # Encoder le fichier en Base64
-    file_base64 = encode_file_to_base64(uploaded_file)
+    # 1. Upload du fichier PDF via l'API Mistral
+    file_id = upload_pdf_to_mistral(uploaded_file)
 
-    # Appel à l'API OCR avec le fichier encodé
-    ocr_result = call_ocr_api_with_base64(file_base64, uploaded_file.name)
-    
-    if ocr_result:
-        # Extraction du texte des pages
-        pages_text = [page.get("text", "") for page in ocr_result.get("pages", [])]
-        full_text = "\n".join(pages_text)
+    if file_id:
+        st.success(f"Fichier uploadé avec succès. ID: {file_id}")
         
-        # Affichage du texte extrait
-        st.subheader("Texte extrait")
-        st.text_area("", full_text, height=300)
-        
-        # Téléchargement au format TXT
-        txt_bytes = BytesIO(full_text.encode("utf-8"))
-        st.download_button(
-            label="Télécharger en TXT",
-            data=txt_bytes,
-            file_name=f"{uploaded_file.name.split('.')[0]}.txt",
-            mime="text/plain"
-        )
-        
-        # Téléchargement au format CSV
-        df = pd.DataFrame({"Texte": pages_text})
-        csv_bytes = df.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="Télécharger en CSV",
-            data=csv_bytes,
-            file_name=f"{uploaded_file.name.split('.')[0]}.csv",
-            mime="text/csv"
-        )
+        # 2. Obtenir une URL signée pour le fichier
+        signed_url = get_signed_url(file_id)
+
+        if signed_url:
+            st.success("URL signée obtenue avec succès.")
+            
+            # 3. Appel à l'API OCR avec l'URL signée
+            ocr_result = call_ocr_api(signed_url)
+
+            if ocr_result:
+                # Extraction du texte des pages
+                pages_text = [page.get("text", "") for page in ocr_result.get("pages", [])]
+                full_text = "\n".join(pages_text)
+                
+                # Affichage du texte extrait
+                st.subheader("Texte extrait")
+                st.text_area("", full_text, height=300)
+                
+                # Téléchargement au format TXT
+                txt_bytes = BytesIO(full_text.encode("utf-8"))
+                st.download_button(
+                    label="Télécharger en TXT",
+                    data=txt_bytes,
+                    file_name=f"{uploaded_file.name.split('.')[0]}.txt",
+                    mime="text/plain"
+                )
+                
+                # Téléchargement au format CSV
+                df = pd.DataFrame({"Texte": pages_text})
+                csv_bytes = df.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    label="Télécharger en CSV",
+                    data=csv_bytes,
+                    file_name=f"{uploaded_file.name.split('.')[0]}.csv",
+                    mime="text/csv"
+                )
 else:
     st.info("Veuillez uploader un fichier PDF.")
