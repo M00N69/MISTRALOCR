@@ -53,7 +53,7 @@ def call_ocr_api(signed_url, model="mistral-ocr-latest"):
 
 # Interface Streamlit
 st.title("OCR Extracteur de Texte avec Mistral AI")
-st.markdown("Upload un fichier PDF pour extraire le texte.")
+st.markdown("Upload un fichier PDF pour extraire le texte avec une mise en forme correcte.")
 
 uploaded_file = st.file_uploader("Choisissez un fichier PDF", type=["pdf"])
 
@@ -77,24 +77,17 @@ if uploaded_file:
 
             if ocr_result:
                 try:
-                    # 🔄 Utiliser .dict() pour convertir en dictionnaire si nécessaire
-                    if hasattr(ocr_result, "pages"):
-                        # Extraire le texte en Markdown depuis chaque page
-                        pages_text = [page.markdown for page in ocr_result.pages]
-                    else:
-                        # Si .pages échoue, essayer d'accéder via .dict()
-                        ocr_result_dict = ocr_result.dict()
-                        pages_text = [page["markdown"] for page in ocr_result_dict.get("pages", [])]
-
-                    full_text = "\n".join(pages_text)
+                    # Extraire le texte en Markdown depuis chaque page
+                    pages_text = [page.markdown for page in ocr_result.pages]
+                    full_text = "\n\n".join(pages_text)
 
                 except AttributeError:
                     st.error("Erreur : Impossible d'accéder à l'attribut 'pages'.")
                     st.stop()
 
-                # Affichage du texte extrait
-                st.subheader("Texte extrait")
-                st.text_area("", full_text, height=300)
+                # 🖌️ Affichage du texte avec mise en forme
+                st.subheader("Texte extrait avec mise en forme")
+                st.markdown(full_text, unsafe_allow_html=True)
 
                 # Téléchargement au format TXT
                 txt_bytes = BytesIO(full_text.encode("utf-8"))
@@ -116,3 +109,4 @@ if uploaded_file:
                 )
 else:
     st.info("Veuillez uploader un fichier PDF.")
+
