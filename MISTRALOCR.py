@@ -7,14 +7,12 @@ from io import BytesIO
 API_KEY = st.secrets["API_KEY"]
 API_URL = "https://api.mistral.ai/v1/ocr"
 
-# Fonction pour uploader le fichier PDF sur file.io et récupérer l'URL
-def upload_to_file_io(file):
-    response = requests.post(
-        "https://file.io",
-        files={"file": file}
-    )
+# Fonction pour uploader le fichier PDF sur transfer.sh et récupérer l'URL
+def upload_to_transfer_sh(file):
+    files = {"file": file}
+    response = requests.post("https://transfer.sh", files=files)
     if response.status_code == 200:
-        return response.json().get("link")
+        return response.text.strip()  # La réponse est une URL directe
     else:
         st.error(f"Erreur lors de l'upload: {response.status_code} - {response.text}")
         return None
@@ -48,10 +46,10 @@ uploaded_file = st.file_uploader("Choisissez un fichier PDF", type=["pdf"])
 if uploaded_file:
     st.write(f"Fichier uploadé: {uploaded_file.name}")
     st.info("Upload du fichier en cours...")
-    
-    # Uploader le fichier sur file.io pour obtenir une URL publique
-    file_url = upload_to_file_io(uploaded_file)
-    
+
+    # Uploader le fichier sur transfer.sh pour obtenir une URL publique
+    file_url = upload_to_transfer_sh(uploaded_file)
+
     if file_url:
         st.success(f"Fichier uploadé avec succès : {file_url}")
         
