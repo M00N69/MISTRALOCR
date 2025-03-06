@@ -77,10 +77,18 @@ if uploaded_file:
             # 3. Appel à l'API OCR avec l'URL signée
             ocr_result = call_ocr_api(signed_url)
 
+            # ➡️ Afficher le type et le contenu brut de la réponse pour déboguer
+            st.write("Type de ocr_result:", type(ocr_result))
+            st.write("Contenu brut de ocr_result:", ocr_result)
+
             if ocr_result:
-                # Extraction du texte des pages avec attributs
-                pages_text = [page.text for page in ocr_result.pages]
-                full_text = "\n".join(pages_text)
+                try:
+                    # Extraction du texte des pages avec attributs
+                    pages_text = [page.text for page in ocr_result.pages]
+                    full_text = "\n".join(pages_text)
+                except AttributeError:
+                    st.error("Erreur : L'attribut 'pages' est introuvable dans la réponse.")
+                    return
                 
                 # Affichage du texte extrait
                 st.subheader("Texte extrait")
