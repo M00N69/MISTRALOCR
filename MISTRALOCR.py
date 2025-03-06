@@ -1,7 +1,5 @@
 import streamlit as st
 import requests
-import pandas as pd
-from io import BytesIO
 from mistralai import Mistral
 import os
 
@@ -59,28 +57,21 @@ uploaded_file = st.file_uploader("Choisissez un fichier PDF", type=["pdf"])
 
 if uploaded_file:
     st.write(f"Fichier uploadé: {uploaded_file.name}")
-    st.info("Upload du fichier en cours...")
+    st.info("Traitement du fichier en cours...")
 
     file_id = upload_pdf_to_mistral(uploaded_file)
 
     if file_id:
-        st.success(f"Fichier uploadé avec succès. ID: {file_id}")
         signed_url = get_signed_url(file_id)
 
         if signed_url:
-            st.success("URL signée obtenue avec succès.")
             ocr_result = call_ocr_api(signed_url)
-
-            # ➡️ Afficher le type et le contenu brut de la réponse pour déboguer
-            st.write("Type de ocr_result:", type(ocr_result))
-            st.write("Contenu brut de ocr_result:", ocr_result)
 
             if ocr_result:
                 try:
                     # Extraire le texte en Markdown depuis chaque page
                     pages_text = [page.markdown for page in ocr_result.pages]
                     full_text = "\n\n".join(pages_text)
-
                 except AttributeError:
                     st.error("Erreur : Impossible d'accéder à l'attribut 'pages'.")
                     st.stop()
@@ -88,25 +79,5 @@ if uploaded_file:
                 # 🖌️ Affichage du texte avec mise en forme
                 st.subheader("Texte extrait avec mise en forme")
                 st.markdown(full_text, unsafe_allow_html=True)
-
-                # Téléchargement au format TXT
-                txt_bytes = BytesIO(full_text.encode("utf-8"))
-                st.download_button(
-                    label="Télécharger en TXT",
-                    data=txt_bytes,
-                    file_name=f"{uploaded_file.name.split('.')[0]}.txt",
-                    mime="text/plain"
-                )
-
-                # Téléchargement au format CSV
-                df = pd.DataFrame({"Texte": pages_text})
-                csv_bytes = df.to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    label="Télécharger en CSV",
-                    data=csv_bytes,
-                    file_name=f"{uploaded_file.name.split('.')[0]}.csv",
-                    mime="text/csv"
-                )
 else:
     st.info("Veuillez uploader un fichier PDF.")
-
