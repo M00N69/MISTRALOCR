@@ -1,3 +1,4 @@
 streamlit
 requests
 pandas
+mistralai  # SDK Mistral pour Python
