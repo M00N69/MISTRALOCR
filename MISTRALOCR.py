@@ -1,5 +1,5 @@
 import streamlit as st
-import requests # Gardez si utilisé ailleurs
+import requests  # Gardez si utilisé ailleurs
 from mistralai import Mistral
 import os
 import json
@@ -21,13 +21,12 @@ try:
     # Si vous avez une section spécifique comme [mistral_api] et une clé API_KEY dedans:
     # API_KEY = st.secrets.mistral_api.API_KEY # Exemple si secrets structurés
     if not API_KEY:
-         st.error("Clé API Mistral non trouvée dans Streamlit Secrets (API_KEY). Assurez-vous qu'elle est définie.")
-         st.stop() # Arrête l'exécution si la clé API n'est pas trouvée
+        st.error("Clé API Mistral non trouvée dans Streamlit Secrets (API_KEY). Assurez-vous qu'elle est définie.")
+        st.stop()  # Arrête l'exécution si la clé API n'est pas trouvée
 
 except Exception as e:
     st.error(f"Erreur lors de l'accès à Streamlit Secrets : {e}")
     st.stop()
-
 
 # Initialiser le client Mistral
 try:
@@ -38,14 +37,14 @@ except Exception as e:
 
 # Modèles à utiliser
 OCR_MODEL = "mistral-ocr-latest"
-LLM_MODEL = "mistral-large-latest" # ou "mistral-medium-latest"
+LLM_MODEL = "mistral-large-latest"  # ou "mistral-medium-latest"
 
 # --- Bloc de diagnostic (Optionnel, peut être retiré une fois le problème résolu) ---
 # Ce bloc peut rester juste après les imports/configs initiales.
 import sys
 import importlib.metadata
 
-st.sidebar.title("Infos Diagnostic") # Un appel Streamlit, mais dans la sidebar, c'est ok ici.
+st.sidebar.title("Infos Diagnostic")  # Un appel Streamlit, mais dans la sidebar, c'est ok ici.
 
 try:
     # Tente de récupérer la version de mistralai
@@ -58,16 +57,15 @@ except Exception as e:
     st.sidebar.warning(f"Impossible de vérifier version 'mistralai' : {e}")
 
 # Affiche le chemin de l'exécutable Python et la version
-st.sidebar.info(f"Chemin Exécutable Python : \n`{sys.executable}`") # Utilise Markdown pour chemin long
+st.sidebar.info(f"Chemin Exécutable Python : \n`{sys.executable}`")  # Utilise Markdown pour chemin long
 st.sidebar.info(f"Version Python : `{sys.version}`")
 # --- Fin du bloc de diagnostic ---
-
 
 # --- Fonctions pour l'OCR et l'Upload (Utilisation de l'API Mistral Files et OCR) ---
 # Ces fonctions peuvent être définies ici, après les configs initiales et les imports.
 # Leurs appels réels se feront plus tard dans le flux de l'application (après l'upload du fichier).
 
-@st.cache_data(show_spinner=False) # Cache les résultats si le fichier est le même
+@st.cache_data(show_spinner=False)  # Cache les résultats si le fichier est le même
 def upload_pdf_to_mistral(_file_content, file_name):
     """Uploads file content to Mistral AI for processing."""
     try:
@@ -84,7 +82,7 @@ def upload_pdf_to_mistral(_file_content, file_name):
         st.error(f"Erreur lors de l'upload du fichier à Mistral API: {e}")
         return None
 
-@st.cache_data(show_spinner=False) # Cache les résultats
+@st.cache_data(show_spinner=False)  # Cache les résultats
 def get_signed_url(_file_id):
     """Gets a signed URL for an uploaded file ID."""
     try:
@@ -95,7 +93,7 @@ def get_signed_url(_file_id):
         st.error(f"Erreur lors de la récupération de l'URL signée: {e}")
         return None
 
-@st.cache_data(show_spinner=False) # Cache les résultats
+@st.cache_data(show_spinner=False)  # Cache les résultats
 def call_ocr_api(_signed_url):
     """Calls the Mistral OCR API to process the document via URL."""
     try:
@@ -164,29 +162,14 @@ def extract_info_with_llm(ocr_text):
 
     Pay very close attention to the tables containing analysis results. You MUST extract EACH ROW from ALL analysis results tables into the 'analysis_results' array. Each object in the array should correspond to one row and contain the 'parameter', 'result', 'unit', 'specification', 'uncertainty', and 'method' columns as listed in the schema, extracting the value for that row.
 
-    Ensure the JSON output is strictly valid and only contains the JSON object within a markdown code block formatted as ````json```.
-
-    JSON Schema:
-    {json.dumps(json_schema, indent=2)}
-
-    If a specific piece of information for any field (including any column for any row in 'analysis_results') is not present or cannot be reliably identified in the text, set the corresponding JSON value to `null`.
-    Extract numerical results, specifications, and uncertainties as strings, preserving the original format (e.g., "59.9", "1.2", "<0.1", "<=82"). Keep dates and other text fields as strings.
-
-    Here is the text from the analysis report:
-
-    ---REPORT_TEXT_START---
-    {ocr_text}
-    ---REPORT_TEXT_END---
-
-    Please provide the extracted information as a single JSON object inside a markdown code block like this:
-    ````json
+    Ensure the JSON output is strictly valid and only contains the JSON object within a markdown code block formatted as ````json__BLOCK_CODE_BLOCK_1__`json
     {{...}}
     ````
     """
 
     try:
         with st.spinner(f"Analyse IA des résultats en cours avec le modèle '{LLM_MODEL}'..."):
-            chat_response = client.chat.completions.create(
+            chat_response = client.chat.complete(  # Corrected method name
                 model=LLM_MODEL,
                 messages=[
                     {"role": "user", "content": prompt}
@@ -239,8 +222,6 @@ def extract_info_with_llm(ocr_text):
 
     except Exception as e:
         st.error(f"Une erreur s'est produite lors de l'appel ou du traitement de la réponse de l'IA : {e}")
-        # import traceback
-        # st.text(traceback.format_exc())
         return None
 
 # --- Helper function for Excel download ---
@@ -272,10 +253,9 @@ st.sidebar.info(f"Modèle OCR utilisé : `{OCR_MODEL}`")
 st.sidebar.info(f"Modèle LLM utilisé pour l'extraction : `{LLM_MODEL}`")
 show_raw_ocr = st.sidebar.checkbox("Afficher le texte OCR brut", value=False)
 
-
 uploaded_file = st.file_uploader("📥 Choisissez un fichier PDF de bulletin d'analyse", type=["pdf"])
 
-extracted_data = None # Variable pour stocker les données extraites par l'IA
+extracted_data = None  # Variable pour stocker les données extraites par l'IA
 
 if uploaded_file:
     st.write(f"Fichier sélectionné: **{uploaded_file.name}**")
@@ -285,7 +265,7 @@ if uploaded_file:
 
     # Step 1: Upload and OCR
     st.subheader("Étape 1: OCR du Document")
-    file_id = upload_pdf_to_mistral(file_content, uploaded_file.name) # Utilisez le contenu et le nom
+    file_id = upload_pdf_to_mistral(file_content, uploaded_file.name)  # Utilisez le contenu et le nom
 
     if file_id:
         # Step 1.1: Get Signed URL
@@ -301,7 +281,7 @@ if uploaded_file:
                     full_text = "\n\n==NEW_PAGE==\n\n".join(pages_text)
 
                     if show_raw_ocr:
-                         with st.expander("Voir le texte OCR brut extrait"):
+                        with st.expander("Voir le texte OCR brut extrait"):
                             st.text(full_text)
 
                     # Step 2: AI Extraction
@@ -339,7 +319,6 @@ if uploaded_file:
                         info_df = pd.DataFrame(info_df_data).set_index("Champ")
                         st.table(info_df)
 
-
                         # Display analysis results in a DataFrame
                         st.markdown("#### Résultats d'Analyse Détaillés")
                         analysis_results = extracted_data.get('analysis_results')
@@ -376,12 +355,10 @@ if uploaded_file:
                 except Exception as e:
                     st.error(f"Une erreur inattendue s'est produite lors du traitement des données extraites : {e}")
 
-
             elif ocr_result is not None and not ocr_result.pages:
-                 st.warning("L'OCR n'a pas pu extraire de pages de texte de ce document.")
+                st.warning("L'OCR n'a pas pu extraire de pages de texte de ce document.")
             elif ocr_result is None:
-                 st.error("Échec de l'OCR (voir les logs ou les messages d'erreur précédents).")
-
+                st.error("Échec de l'OCR (voir les logs ou les messages d'erreur précédents).")
 
 else:
     st.info("Veuillez uploader un fichier PDF pour commencer l'analyse.")
