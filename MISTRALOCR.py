@@ -16,7 +16,6 @@ st.set_page_config(page_title="Extracteur de Bulletins d'Analyse", layout="wide"
 # Assurez-vous que votre fichier .streamlit/secrets.toml contient API_KEY="votre_cle_api"
 # Ou configurez-le via l'interface Streamlit Cloud Secrets.
 try:
-    # Utilisation directe de "API_KEY" si c'est le nom dans secrets.toml
     API_KEY = st.secrets.get("API_KEY")
     if not API_KEY:
         st.error("Clé API Mistral non trouvée dans Streamlit Secrets (API_KEY). Assurez-vous qu'elle est définie.")
@@ -38,6 +37,7 @@ OCR_MODEL = "mistral-ocr-latest"
 LLM_MODEL = "mistral-large-latest" # ou "mistral-medium-latest"
 
 # --- Bloc de diagnostic (Peut être retiré plus tard) ---
+# Ce bloc confirme quelle version de la librairie est ACTUELLEMENT utilisée.
 import sys
 import importlib.metadata
 
@@ -132,12 +132,7 @@ def extract_info_with_llm(ocr_text):
       "conclusion": "string or null"
     }
 
-    # REFINED PROMPT:
-    # 1. Explicitly state to extract values *from the text*.
-    # 2. Present a simplified structure example to the LLM instead of the full schema dict string,
-    #    removing the potentially confusing "string or null" labels inside the prompt.
-    # 3. Add examples of expected value types in the instructions.
-
+    # REFINED PROMPT (same as last time, but included again for completeness)
     prompt = f"""
     You are an expert in analyzing laboratory food analysis reports.
     Your task is to extract the key information from the provided OCR text.
@@ -167,22 +162,22 @@ def extract_info_with_llm(ocr_text):
     {ocr_text}
     ---REPORT_TEXT_END---
     """
-    # Removed the diagnostic prints within the function unless needed again,
-    # as the previous issue is resolved.
 
     try:
         with st.spinner(f"Analyse IA des résultats en cours avec le modèle '{LLM_MODEL}'..."):
-            # This call should now work with mistralai>=1.0.0
+            # >>>>>> CORRECTION ESSENTIELLE ICI <<<<<<
+            # Pour mistralai version 1.0+, il FAUT utiliser client.chat.completions.create
+            # Votre diagnostic 1.7.0 confirme que c'est la bonne méthode.
             chat_response = client.chat.completions.create(
                 model=LLM_MODEL,
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
-                # Keep response_format to strongly encourage JSON
-                response_format={"type": "json_object"},
-                # Keep temperature at 0 for deterministic extraction
-                temperature=0
+                response_format={"type": "json_object"}, # Demande un objet JSON
+                temperature=0 # Température à 0 pour un résultat déterministe
             )
+            # >>>>>> FIN DE LA CORRECTION ESSENTIELLE <<<<<<
+
         st.success("Analyse IA terminée.")
 
         response_content = chat_response.choices[0].message.content.strip()
@@ -191,10 +186,10 @@ def extract_info_with_llm(ocr_text):
         json_string = None
 
         try:
-            # Try direct parsing first
+            # Tente de parser le JSON direct
             extracted_data = json.loads(response_content)
         except json.JSONDecodeError:
-            # If direct parsing fails, try to find the JSON block in markdown
+            # Si échec, cherche un bloc markdown JSON
             st.warning("Le modèle n'a pas retourné de JSON direct. Recherche du bloc de code markdown...")
             if response_content.startswith("```json"):
                 json_string = response_content[len("```json"):].strip()
@@ -220,23 +215,26 @@ def extract_info_with_llm(ocr_text):
                  st.text(response_content)
                  return None
 
-        # Basic validation that the output is a dictionary
+        # Validation basique de la structure
         if not isinstance(extracted_data, dict):
              st.error("L'IA n'a pas retourné un objet JSON de niveau supérieur valide.")
              st.text("Réponse brute de l'IA:")
              st.text(response_content)
              return None
 
-        # Optional: More robust validation against the schema if needed, but adds complexity.
-        # For now, we rely on the LLM following instructions.
+        # Ici, extracted_data DOIT être un dictionnaire Python contenant les données extraites
+        # C'est ce dictionnaire qui est utilisé pour créer le DataFrame.
+        # Si les valeurs sont vides ou "string", le problème est dans le prompt ou le modèle, PAS la syntaxe de l'appel API.
+        # Si le parsing réussit mais que le dict est vide ou mal formé, le problème est la réponse de l'IA.
 
         return extracted_data
 
     except Exception as e:
+        # Cette section capture les erreurs qui se produisent *pendant* l'appel API ou le traitement de la réponse.
+        # L'erreur 'Chat' object has no attribute 'completions' est capturée ici.
         st.error(f"Une erreur s'est produite lors de l'appel ou du traitement de la réponse de l'IA : {e}")
-        # If needed for debugging, uncomment:
         # import traceback
-        # st.text(traceback.format_exc())
+        # st.text(traceback.format_exc()) # Décommenter pour voir la pile d'appels complète si besoin.
         return None
 
 # --- Helper function for Excel download ---
@@ -279,22 +277,18 @@ if uploaded_file:
     file_content = uploaded_file.getvalue()
 
     st.subheader("Étape 1: OCR du Document")
-    file_id = upload_pdf_to_mistral(file_content, uploaded_file.name)  # Utilisez le contenu et le nom
+    file_id = upload_pdf_to_mistral(file_content, uploaded_file.name)
 
     if file_id:
-        st.markdown(f"ID du fichier uploaded: `{file_id}`") # Afficher l'ID pour référence si besoin
-        # Step 1.1: Get Signed URL
+        # st.markdown(f"ID du fichier uploaded: `{file_id}`") # Afficher l'ID pour référence si besoin
         signed_url = get_signed_url(file_id)
 
         if signed_url:
-            st.markdown(f"URL signée pour l'OCR: `{signed_url}`") # Afficher l'URL pour référence
+            # st.markdown(f"URL signée pour l'OCR: `{signed_url}`") # Afficher l'URL pour référence
 
-            # Step 1.2: Perform OCR
             ocr_result = call_ocr_api(signed_url)
 
-            # After successful OCR, delete the uploaded file from Mistral to free up space/resources
-            # This is good practice if you don't need the file stored by Mistral long term.
-            # Note: Deletion happens asynchronously.
+            # Optionnel: supprimer le fichier uploaded une fois l'OCR terminé
             # try:
             #     client.files.delete(file_id=file_id)
             #     st.sidebar.success(f"Fichier uploaded (ID: {file_id}) marqué pour suppression.")
@@ -312,7 +306,7 @@ if uploaded_file:
                             st.text(full_text)
 
                     st.subheader("Étape 2: Extraction des Informations Structurées par IA")
-                    # This call should now work with mistralai>=1.0.0 and return correct data
+                    # Appelle la fonction qui utilise l'API Chat pour extraire les données
                     extracted_data = extract_info_with_llm(full_text)
 
                     if extracted_data:
@@ -342,7 +336,6 @@ if uploaded_file:
                             "Conclusion Générale": extracted_data.get('conclusion')
                         }
 
-                        # Convert to DataFrame for display, handling None/null
                         info_df_data = [{"Champ": key, "Valeur": value if value is not None else "N/A"} for key, value in report_client_sample_info.items()]
                         info_df = pd.DataFrame(info_df_data).set_index("Champ")
                         st.table(info_df)
@@ -373,8 +366,7 @@ if uploaded_file:
                                     )
                             else:
                                 st.error("L'IA a retourné les résultats d'analyse dans un format inattendu (pas une liste de dictionnaires).")
-                                # Show the raw output for debugging
-                                st.json(analysis_results)
+                                st.json(analysis_results) # Show the raw output for debugging
                         else:
                             st.warning("Aucun résultat d'analyse n'a pu être extrait par l'IA.")
 
