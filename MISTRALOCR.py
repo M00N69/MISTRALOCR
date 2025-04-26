@@ -10,6 +10,7 @@ st.set_page_config(page_title="Extracteur de Bulletins d'Analyse", layout="wide"
 
 # --- Configuration API Mistral ---
 try:
+    # Récupérer la clé API depuis les secrets de Streamlit
     API_KEY = st.secrets["API_KEY"]
     if not API_KEY:
         st.error("Clé API Mistral non trouvée dans Streamlit Secrets (API_KEY). Assurez-vous qu'elle est définie.")
@@ -32,6 +33,7 @@ LLM_MODEL = "mistral-large-latest"
 # --- Fonctions pour l'OCR et l'Upload ---
 @st.cache_data(show_spinner=False)
 def upload_pdf_to_mistral(_file_content, file_name):
+    """Uploads file content to Mistral AI for processing."""
     try:
         uploaded_pdf = client.files.upload(
             file={
@@ -48,6 +50,7 @@ def upload_pdf_to_mistral(_file_content, file_name):
 
 @st.cache_data(show_spinner=False)
 def get_signed_url(_file_id):
+    """Gets a signed URL for an uploaded file ID."""
     try:
         signed_url = client.files.get_signed_url(file_id=_file_id)
         st.success("URL signée pour l'OCR récupérée.")
@@ -58,6 +61,7 @@ def get_signed_url(_file_id):
 
 @st.cache_data(show_spinner=False)
 def call_ocr_api(_signed_url):
+    """Calls the Mistral OCR API to process the document via URL."""
     try:
         with st.spinner(f"Traitement OCR en cours avec le modèle '{OCR_MODEL}'..."):
             ocr_response = client.ocr.process(
@@ -204,6 +208,7 @@ def extract_info_with_llm(ocr_text):
 
 # --- Helper function for Excel download ---
 def to_excel(df):
+    """Saves a DataFrame to an Excel file in memory."""
     output = BytesIO()
     try:
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
