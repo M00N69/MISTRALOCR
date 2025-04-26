@@ -1,5 +1,5 @@
 import streamlit as st
-import requests  # Gardez si utilisé ailleurs
+import requests
 from mistralai import Mistral
 import os
 import json
@@ -8,21 +8,19 @@ from io import BytesIO
 import base64
 
 # --- Configuration de la page Streamlit ---
-# CECI DOIT ÊTRE LA PREMIÈRE COMMANDE STREAMLIT !
+# CECI DOIT ABSOLUMENT ÊTRE LA TOUTE PREMIÈRE COMMANDE STREAMLIT !
 st.set_page_config(page_title="Extracteur de Bulletins d'Analyse", layout="wide")
 
 # --- Configuration API Mistral ---
 # Utiliser st.secrets pour une gestion sécurisée des clés API
-# Assurez-vous que votre fichier .streamlit/secrets.toml contient [mistral_api] API_KEY="votre_cle_api"
+# Assurez-vous que votre fichier .streamlit/secrets.toml contient API_KEY="votre_cle_api"
 # Ou configurez-le via l'interface Streamlit Cloud Secrets.
 try:
     # Utilisation directe de "API_KEY" si c'est le nom dans secrets.toml
     API_KEY = st.secrets.get("API_KEY")
-    # Si vous avez une section spécifique comme [mistral_api] et une clé API_KEY dedans:
-    # API_KEY = st.secrets.mistral_api.API_KEY # Exemple si secrets structurés
     if not API_KEY:
         st.error("Clé API Mistral non trouvée dans Streamlit Secrets (API_KEY). Assurez-vous qu'elle est définie.")
-        st.stop()  # Arrête l'exécution si la clé API n'est pas trouvée
+        st.stop()
 
 except Exception as e:
     st.error(f"Erreur lors de l'accès à Streamlit Secrets : {e}")
@@ -37,35 +35,30 @@ except Exception as e:
 
 # Modèles à utiliser
 OCR_MODEL = "mistral-ocr-latest"
-LLM_MODEL = "mistral-large-latest"  # ou "mistral-medium-latest"
+LLM_MODEL = "mistral-large-latest" # ou "mistral-medium-latest"
 
-# --- Bloc de diagnostic (Optionnel, peut être retiré une fois le problème résolu) ---
-# Ce bloc peut rester juste après les imports/configs initiales.
+# --- Bloc de diagnostic (Peut être retiré plus tard) ---
 import sys
 import importlib.metadata
 
-st.sidebar.title("Infos Diagnostic")  # Un appel Streamlit, mais dans la sidebar, c'est ok ici.
+st.sidebar.title("Infos Diagnostic")
 
 try:
-    # Tente de récupérer la version de mistralai
-    # importlib.metadata.version est dans la lib standard depuis Python 3.8
     mistralai_version = importlib.metadata.version("mistralai")
     st.sidebar.info(f"Version de 'mistralai' détectée : {mistralai_version}")
 except importlib.metadata.PackageNotFoundError:
-    st.sidebar.error("'mistralai' n'est pas installé dans cet environnement.")
+    st.sidebar.error("'mistralai' n'est pas installé.")
 except Exception as e:
     st.sidebar.warning(f"Impossible de vérifier version 'mistralai' : {e}")
 
-# Affiche le chemin de l'exécutable Python et la version
-st.sidebar.info(f"Chemin Exécutable Python : \n`{sys.executable}`")  # Utilise Markdown pour chemin long
+st.sidebar.info(f"Chemin Exécutable Python : \n`{sys.executable}`")
 st.sidebar.info(f"Version Python : `{sys.version}`")
 # --- Fin du bloc de diagnostic ---
 
-# --- Fonctions pour l'OCR et l'Upload (Utilisation de l'API Mistral Files et OCR) ---
-# Ces fonctions peuvent être définies ici, après les configs initiales et les imports.
-# Leurs appels réels se feront plus tard dans le flux de l'application (après l'upload du fichier).
 
-@st.cache_data(show_spinner=False)  # Cache les résultats si le fichier est le même
+# --- Fonctions ---
+
+@st.cache_data(show_spinner=False)
 def upload_pdf_to_mistral(_file_content, file_name):
     """Uploads file content to Mistral AI for processing."""
     try:
@@ -82,7 +75,7 @@ def upload_pdf_to_mistral(_file_content, file_name):
         st.error(f"Erreur lors de l'upload du fichier à Mistral API: {e}")
         return None
 
-@st.cache_data(show_spinner=False)  # Cache les résultats
+@st.cache_data(show_spinner=False)
 def get_signed_url(_file_id):
     """Gets a signed URL for an uploaded file ID."""
     try:
@@ -93,7 +86,7 @@ def get_signed_url(_file_id):
         st.error(f"Erreur lors de la récupération de l'URL signée: {e}")
         return None
 
-@st.cache_data(show_spinner=False)  # Cache les résultats
+@st.cache_data(show_spinner=False)
 def call_ocr_api(_signed_url):
     """Calls the Mistral OCR API to process the document via URL."""
     try:
@@ -112,69 +105,82 @@ def call_ocr_api(_signed_url):
         st.error(f"Erreur lors de l'appel de l'API OCR: {e}")
         return None
 
-# --- Fonction pour l'Extraction Structurée par IA (Utilisation de l'API Mistral Chat) ---
 
 def extract_info_with_llm(ocr_text):
     """Uses a Mistral LLM to extract structured information from OCR text."""
+    # Define the desired JSON structure (Schema) - Keep this as a Python dict
     json_schema = {
       "report_info": {
-        "lab_name": "string or null",
-        "report_id": "string or null",
-        "issue_date": "string or null",
-        "validation_date": "string or null",
-        "validator_name": "string or null"
+        "lab_name": "string or null", "report_id": "string or null", "issue_date": "string or null",
+        "validation_date": "string or null", "validator_name": "string or null"
       },
       "client_info": {
-        "client_name": "string or null",
-        "client_address": "string or null",
-        "client_id": "string or null"
+        "client_name": "string or null", "client_address": "string or null", "client_id": "string or null"
       },
       "sample_info": {
-        "product_name": "string or null",
-        "lot_number": "string or null",
-        "sample_id": "string or null",
-        "date_received": "string or null",
-        "date_analyzed": "string or null",
-        "date_collected": "string or null",
-        "product_format": "string or null",
-        "best_before_date": "string or null",
-        "supplier": "string or null",
+        "product_name": "string or null", "lot_number": "string or null", "sample_id": "string or null",
+        "date_received": "string or null", "date_analyzed": "string or null", "date_collected": "string or null",
+        "product_format": "string or null", "best_before_date": "string or null", "supplier": "string or null",
         "ean_code": "string or null"
       },
       "analysis_results": [
         {
-          "parameter": "string or null",
-          "result": "string or null",
-          "unit": "string or null",
-          "specification": "string or null",
-          "uncertainty": "string or null",
-          "method": "string or null"
+          "parameter": "string or null", "result": "string or null", "unit": "string or null",
+          "specification": "string or null", "uncertainty": "string or null", "method": "string or null"
         }
       ],
       "conclusion": "string or null"
     }
 
+    # REFINED PROMPT:
+    # 1. Explicitly state to extract values *from the text*.
+    # 2. Present a simplified structure example to the LLM instead of the full schema dict string,
+    #    removing the potentially confusing "string or null" labels inside the prompt.
+    # 3. Add examples of expected value types in the instructions.
+
     prompt = f"""
-    You are an expert in analyzing laboratory food analysis reports (bulletins d'analyse).
-    I will provide you with the full text extracted from such a report using OCR.
-    The text may contain information from multiple pages, separated by '==NEW_PAGE=='.
-    Your primary task is to extract the key information and structure it into a JSON object based strictly on the following schema.
+    You are an expert in analyzing laboratory food analysis reports.
+    Your task is to extract the key information from the provided OCR text.
+    Structure the extracted information into a JSON object.
 
-    Pay very close attention to the tables containing analysis results. You MUST extract EACH ROW from ALL analysis results tables into the 'analysis_results' array. Each object in the array should correspond to one row and contain the 'parameter', 'result', 'unit', 'specification', 'uncertainty', and 'method' columns as listed in the schema, extracting the value for that row.
+    Follow this JSON structure pattern:
+    {{
+      "report_info": {{ "lab_name": "...", "report_id": "...", "issue_date": "...", "validation_date": "...", "validator_name": "..." }},
+      "client_info": {{ "client_name": "...", "client_address": "...", "client_id": "..." }},
+      "sample_info": {{ "product_name": "...", "lot_number": "...", "sample_id": "...", "date_received": "...", "date_analyzed": "...", "date_collected": "...", "product_format": "...", "best_before_date": "...", "supplier": "...", "ean_code": "..." }},
+      "analysis_results": [
+        {{ "parameter": "...", "result": "...", "unit": "...", "specification": "...", "uncertainty": "...", "method": "..." }}
+        // Add an object for each analysis result row found
+      ],
+      "conclusion": "..."
+    }}
 
-    Ensure the JSON output is strictly valid and only contains the JSON object within a markdown code block formatted as ````json__BLOCK_CODE_BLOCK_1__`json
-    {{...}}
-    ````
+    For each field ('...') in the structure above, extract the corresponding value *directly from the report text*.
+    If a specific piece of information is not found or is not applicable, set the corresponding JSON value to `null`.
+
+    Pay special attention to the analysis results tables. Extract *every* row from these tables and add it as a separate object to the 'analysis_results' array.
+    Ensure the values in 'result', 'specification', 'uncertainty', 'date_received', 'date_analyzed', 'date_collected', 'best_before_date' preserve their original format from the text (e.g., "59.9", "<=82", "1.2", "N/A", "02/02/2024", "15/02/2024"). Other fields should contain the text content found.
+
+    Ensure the output is ONLY the JSON object within a markdown code block formatted as ```json...```.
+
+    ---REPORT_TEXT_START---
+    {ocr_text}
+    ---REPORT_TEXT_END---
     """
+    # Removed the diagnostic prints within the function unless needed again,
+    # as the previous issue is resolved.
 
     try:
         with st.spinner(f"Analyse IA des résultats en cours avec le modèle '{LLM_MODEL}'..."):
-            chat_response = client.chat.complete(  # Corrected method name
+            # This call should now work with mistralai>=1.0.0
+            chat_response = client.chat.completions.create(
                 model=LLM_MODEL,
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
+                # Keep response_format to strongly encourage JSON
                 response_format={"type": "json_object"},
+                # Keep temperature at 0 for deterministic extraction
                 temperature=0
             )
         st.success("Analyse IA terminée.")
@@ -185,8 +191,10 @@ def extract_info_with_llm(ocr_text):
         json_string = None
 
         try:
+            # Try direct parsing first
             extracted_data = json.loads(response_content)
         except json.JSONDecodeError:
+            # If direct parsing fails, try to find the JSON block in markdown
             st.warning("Le modèle n'a pas retourné de JSON direct. Recherche du bloc de code markdown...")
             if response_content.startswith("```json"):
                 json_string = response_content[len("```json"):].strip()
@@ -212,16 +220,23 @@ def extract_info_with_llm(ocr_text):
                  st.text(response_content)
                  return None
 
+        # Basic validation that the output is a dictionary
         if not isinstance(extracted_data, dict):
              st.error("L'IA n'a pas retourné un objet JSON de niveau supérieur valide.")
              st.text("Réponse brute de l'IA:")
              st.text(response_content)
              return None
 
+        # Optional: More robust validation against the schema if needed, but adds complexity.
+        # For now, we rely on the LLM following instructions.
+
         return extracted_data
 
     except Exception as e:
         st.error(f"Une erreur s'est produite lors de l'appel ou du traitement de la réponse de l'IA : {e}")
+        # If needed for debugging, uncomment:
+        # import traceback
+        # st.text(traceback.format_exc())
         return None
 
 # --- Helper function for Excel download ---
@@ -263,17 +278,29 @@ if uploaded_file:
     # Lire le contenu du fichier une seule fois
     file_content = uploaded_file.getvalue()
 
-    # Step 1: Upload and OCR
     st.subheader("Étape 1: OCR du Document")
     file_id = upload_pdf_to_mistral(file_content, uploaded_file.name)  # Utilisez le contenu et le nom
 
     if file_id:
+        st.markdown(f"ID du fichier uploaded: `{file_id}`") # Afficher l'ID pour référence si besoin
         # Step 1.1: Get Signed URL
         signed_url = get_signed_url(file_id)
 
         if signed_url:
+            st.markdown(f"URL signée pour l'OCR: `{signed_url}`") # Afficher l'URL pour référence
+
             # Step 1.2: Perform OCR
             ocr_result = call_ocr_api(signed_url)
+
+            # After successful OCR, delete the uploaded file from Mistral to free up space/resources
+            # This is good practice if you don't need the file stored by Mistral long term.
+            # Note: Deletion happens asynchronously.
+            # try:
+            #     client.files.delete(file_id=file_id)
+            #     st.sidebar.success(f"Fichier uploaded (ID: {file_id}) marqué pour suppression.")
+            # except Exception as del_e:
+            #     st.sidebar.warning(f"Erreur lors de la tentative de suppression du fichier {file_id}: {del_e}")
+
 
             if ocr_result and ocr_result.pages:
                 try:
@@ -284,8 +311,8 @@ if uploaded_file:
                         with st.expander("Voir le texte OCR brut extrait"):
                             st.text(full_text)
 
-                    # Step 2: AI Extraction
                     st.subheader("Étape 2: Extraction des Informations Structurées par IA")
+                    # This call should now work with mistralai>=1.0.0 and return correct data
                     extracted_data = extract_info_with_llm(full_text)
 
                     if extracted_data:
@@ -315,9 +342,11 @@ if uploaded_file:
                             "Conclusion Générale": extracted_data.get('conclusion')
                         }
 
+                        # Convert to DataFrame for display, handling None/null
                         info_df_data = [{"Champ": key, "Valeur": value if value is not None else "N/A"} for key, value in report_client_sample_info.items()]
                         info_df = pd.DataFrame(info_df_data).set_index("Champ")
                         st.table(info_df)
+
 
                         # Display analysis results in a DataFrame
                         st.markdown("#### Résultats d'Analyse Détaillés")
@@ -327,6 +356,7 @@ if uploaded_file:
                             if isinstance(analysis_results, list) and all(isinstance(item, dict) for item in analysis_results):
                                 results_df = pd.DataFrame(analysis_results)
                                 display_cols = ['parameter', 'result', 'unit', 'specification', 'uncertainty', 'method']
+                                # Ensure all display columns exist, fill NaN with empty string
                                 results_df = results_df.reindex(columns=display_cols).fillna('')
 
                                 st.dataframe(results_df, use_container_width=True)
@@ -343,6 +373,7 @@ if uploaded_file:
                                     )
                             else:
                                 st.error("L'IA a retourné les résultats d'analyse dans un format inattendu (pas une liste de dictionnaires).")
+                                # Show the raw output for debugging
                                 st.json(analysis_results)
                         else:
                             st.warning("Aucun résultat d'analyse n'a pu être extrait par l'IA.")
@@ -354,11 +385,13 @@ if uploaded_file:
                     st.error("Erreur : Le résultat OCR n'a pas le format attendu (attribut 'pages' manquant).")
                 except Exception as e:
                     st.error(f"Une erreur inattendue s'est produite lors du traitement des données extraites : {e}")
+                    # import traceback
+                    # st.text(traceback.format_exc())
 
             elif ocr_result is not None and not ocr_result.pages:
-                st.warning("L'OCR n'a pas pu extraire de pages de texte de ce document.")
+                 st.warning("L'OCR n'a pas pu extraire de pages de texte de ce document.")
             elif ocr_result is None:
-                st.error("Échec de l'OCR (voir les logs ou les messages d'erreur précédents).")
+                 st.error("Échec de l'OCR (voir les logs ou les messages d'erreur précédents).")
 
 else:
     st.info("Veuillez uploader un fichier PDF pour commencer l'analyse.")
