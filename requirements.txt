@@ -1,5 +1,5 @@
 streamlit
 requests
+mistralai>=1.0.0
 pandas
-mistralai  # SDK Mistral pour Python
 xlsxwriter
