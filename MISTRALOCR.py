@@ -14,7 +14,6 @@ st.set_page_config(page_title="Extracteur de Bulletins d'Analyse", layout="wide"
 # --- Configuration API Mistral ---
 # Utiliser st.secrets pour une gestion sécurisée des clés API
 # Assurez-vous que votre fichier .streamlit/secrets.toml contient API_KEY="votre_cle_api"
-# Ou configurez-le via l'interface Streamlit Cloud Secrets.
 try:
     API_KEY = st.secrets.get("API_KEY")
     if not API_KEY:
@@ -38,6 +37,7 @@ LLM_MODEL = "mistral-large-latest" # ou "mistral-medium-latest"
 
 # --- Bloc de diagnostic (Peut être retiré plus tard) ---
 # Ce bloc confirme quelle version de la librairie est ACTUELLEMENT utilisée.
+# Il est utile pour vérifier l'environnement.
 import sys
 import importlib.metadata
 
@@ -109,6 +109,7 @@ def call_ocr_api(_signed_url):
 def extract_info_with_llm(ocr_text):
     """Uses a Mistral LLM to extract structured information from OCR text."""
     # Define the desired JSON structure (Schema) - Keep this as a Python dict
+    # This is used internally by the app to know the keys, not directly in the prompt anymore
     json_schema = {
       "report_info": {
         "lab_name": "string or null", "report_id": "string or null", "issue_date": "string or null",
@@ -132,7 +133,9 @@ def extract_info_with_llm(ocr_text):
       "conclusion": "string or null"
     }
 
-    # REFINED PROMPT (same as last time, but included again for completeness)
+    # REFINED PROMPT (Same as last time, focused on extracting values)
+    # This prompt tells the LLM the structure using "..." placeholders
+    # and explicitly asks it to fill them with values from the text.
     prompt = f"""
     You are an expert in analyzing laboratory food analysis reports.
     Your task is to extract the key information from the provided OCR text.
@@ -145,7 +148,7 @@ def extract_info_with_llm(ocr_text):
       "sample_info": {{ "product_name": "...", "lot_number": "...", "sample_id": "...", "date_received": "...", "date_analyzed": "...", "date_collected": "...", "product_format": "...", "best_before_date": "...", "supplier": "...", "ean_code": "..." }},
       "analysis_results": [
         {{ "parameter": "...", "result": "...", "unit": "...", "specification": "...", "uncertainty": "...", "method": "..." }}
-        // Add an object for each analysis result row found
+        // Add an object for each analysis result row found in the tables
       ],
       "conclusion": "..."
     }}
@@ -165,9 +168,9 @@ def extract_info_with_llm(ocr_text):
 
     try:
         with st.spinner(f"Analyse IA des résultats en cours avec le modèle '{LLM_MODEL}'..."):
-            # >>>>>> CORRECTION ESSENTIELLE ICI <<<<<<
-            # Pour mistralai version 1.0+, il FAUT utiliser client.chat.completions.create
-            # Votre diagnostic 1.7.0 confirme que c'est la bonne méthode.
+            # >>>>>> UTILISER LA SYNTAXE CORRECTE POUR LA LIBRAIRIE 1.7.0+ <<<<<<
+            # C'est CERTAINEMENT client.chat.completions.create
+            # Si cela donne toujours l'erreur, c'est un problème d'environnement/cache TRES persistant.
             chat_response = client.chat.completions.create(
                 model=LLM_MODEL,
                 messages=[
@@ -176,10 +179,11 @@ def extract_info_with_llm(ocr_text):
                 response_format={"type": "json_object"}, # Demande un objet JSON
                 temperature=0 # Température à 0 pour un résultat déterministe
             )
-            # >>>>>> FIN DE LA CORRECTION ESSENTIELLE <<<<<<
+            # >>>>>> FIN DE LA SYNTAXE CORRECTE <<<<<<
 
         st.success("Analyse IA terminée.")
 
+        # Le reste du code gère le parsing de la réponse
         response_content = chat_response.choices[0].message.content.strip()
 
         extracted_data = None
@@ -222,10 +226,8 @@ def extract_info_with_llm(ocr_text):
              st.text(response_content)
              return None
 
-        # Ici, extracted_data DOIT être un dictionnaire Python contenant les données extraites
-        # C'est ce dictionnaire qui est utilisé pour créer le DataFrame.
-        # Si les valeurs sont vides ou "string", le problème est dans le prompt ou le modèle, PAS la syntaxe de l'appel API.
-        # Si le parsing réussit mais que le dict est vide ou mal formé, le problème est la réponse de l'IA.
+        # Ici, extracted_data DOIT être un dictionnaire Python contenant les données extraites.
+        # Si les valeurs sont vides ou "string", c'est que l'IA n'a pas correctement extrait.
 
         return extracted_data
 
@@ -233,8 +235,10 @@ def extract_info_with_llm(ocr_text):
         # Cette section capture les erreurs qui se produisent *pendant* l'appel API ou le traitement de la réponse.
         # L'erreur 'Chat' object has no attribute 'completions' est capturée ici.
         st.error(f"Une erreur s'est produite lors de l'appel ou du traitement de la réponse de l'IA : {e}")
+        # Si vous voulez voir la pile d'appels complète pour comprendre exactement d'où vient l'erreur persistante :
         # import traceback
-        # st.text(traceback.format_exc()) # Décommenter pour voir la pile d'appels complète si besoin.
+        # st.text("Traceback complet:")
+        # st.text(traceback.format_exc())
         return None
 
 # --- Helper function for Excel download ---
@@ -280,11 +284,11 @@ if uploaded_file:
     file_id = upload_pdf_to_mistral(file_content, uploaded_file.name)
 
     if file_id:
-        # st.markdown(f"ID du fichier uploaded: `{file_id}`") # Afficher l'ID pour référence si besoin
+        # st.markdown(f"ID du fichier uploaded: `{file_id}`") # Peut être décommenté pour débug
         signed_url = get_signed_url(file_id)
 
         if signed_url:
-            # st.markdown(f"URL signée pour l'OCR: `{signed_url}`") # Afficher l'URL pour référence
+            # st.markdown(f"URL signée pour l'OCR: `{signed_url}`") # Peut être décommenté pour débug
 
             ocr_result = call_ocr_api(signed_url)
 
@@ -377,8 +381,11 @@ if uploaded_file:
                     st.error("Erreur : Le résultat OCR n'a pas le format attendu (attribut 'pages' manquant).")
                 except Exception as e:
                     st.error(f"Une erreur inattendue s'est produite lors du traitement des données extraites : {e}")
+                    # Décommenter pour voir la pile d'appels complète :
                     # import traceback
+                    # st.text("Traceback complet:")
                     # st.text(traceback.format_exc())
+
 
             elif ocr_result is not None and not ocr_result.pages:
                  st.warning("L'OCR n'a pas pu extraire de pages de texte de ce document.")
