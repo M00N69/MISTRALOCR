@@ -1,5 +1,5 @@
 import streamlit as st
-import requests
+import requests # si utilisé ailleurs
 from mistralai import Mistral
 import os
 import json
@@ -7,21 +7,24 @@ import pandas as pd
 from io import BytesIO
 import base64
 
-# Ajoutez ce bloc POUR DIAGNOSTIC
+# Assurez-vous que ce bloc est placé ici, très tôt après les imports
+# --- Début du bloc de diagnostic ---
 import sys
 import importlib.metadata
 
+st.sidebar.title("Infos Diagnostic") # Ajoutez une ligne simple comme celle-ci
+
 try:
     mistralai_version = importlib.metadata.version("mistralai")
-    st.sidebar.info(f"Version de 'mistralai' détectée par l'application : {mistralai_version}")
+    st.sidebar.info(f"Version de 'mistralai' détectée : {mistralai_version}")
 except importlib.metadata.PackageNotFoundError:
-    st.sidebar.error("'mistralai' n'est pas installé dans cet environnement.")
+    st.sidebar.error("'mistralai' n'est pas installé.")
 except Exception as e:
-    st.sidebar.warning(f"Impossible de vérifier la version de 'mistralai' : {e}")
+    st.sidebar.warning(f"Impossible de vérifier version 'mistralai' : {e}")
 
-st.sidebar.info(f"Chemin de l'exécutable Python : {sys.executable}")
-st.sidebar.info(f"Version de Python : {sys.version}")
-# Fin du bloc de diagnostic
+st.sidebar.info(f"Chemin Exécutable Python : {sys.executable}")
+st.sidebar.info(f"Version Python : {sys.version}")
+# --- Fin du bloc de diagnostic ---
 
 # --- Configuration ---
 
