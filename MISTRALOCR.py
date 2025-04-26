@@ -1,27 +1,19 @@
 import streamlit as st
-import requests  # Keep if used elsewhere
 from mistralai import Mistral
 import os
 import json
 import pandas as pd
 from io import BytesIO
-import base64
 
 # --- Configuration de la page Streamlit ---
-# CECI DOIT ÊTRE LA PREMIÈRE COMMANDE STREAMLIT !
 st.set_page_config(page_title="Extracteur de Bulletins d'Analyse", layout="wide")
 
 # --- Configuration API Mistral ---
-# Utiliser st.secrets pour une gestion sécurisée des clés API
-# Assurez-vous que votre fichier .streamlit/secrets.toml contient [mistral_api] API_KEY="votre_cle_api"
-# Ou configurez-le via l'interface Streamlit Cloud Secrets.
 try:
-    # Utilisation directe de "API_KEY" si c'est le nom dans secrets.toml
-    API_KEY = st.secrets.get("API_KEY")
+    API_KEY = st.secrets["API_KEY"]
     if not API_KEY:
         st.error("Clé API Mistral non trouvée dans Streamlit Secrets (API_KEY). Assurez-vous qu'elle est définie.")
-        st.stop()  # Arrête l'exécution si la clé API n'est pas trouvée
-
+        st.stop()
 except Exception as e:
     st.error(f"Erreur lors de l'accès à Streamlit Secrets : {e}")
     st.stop()
@@ -35,29 +27,11 @@ except Exception as e:
 
 # Modèles à utiliser
 OCR_MODEL = "mistral-ocr-latest"
-LLM_MODEL = "mistral-large-latest"  # ou "mistral-medium-latest"
+LLM_MODEL = "mistral-large-latest"
 
-# --- Bloc de diagnostic (Optionnel, peut être retiré une fois le problème résolu) ---
-import sys
-import importlib.metadata
-
-st.sidebar.title("Infos Diagnostic")
-
-try:
-    mistralai_version = importlib.metadata.version("mistralai")
-    st.sidebar.info(f"Version de 'mistralai' détectée : {mistralai_version}")
-except importlib.metadata.PackageNotFoundError:
-    st.sidebar.error("'mistralai' n'est pas installé dans cet environnement.")
-except Exception as e:
-    st.sidebar.warning(f"Impossible de vérifier version 'mistralai' : {e}")
-
-st.sidebar.info(f"Chemin Exécutable Python : \n`{sys.executable}`")
-st.sidebar.info(f"Version Python : `{sys.version}`")
-
-# --- Fonctions pour l'OCR et l'Upload (Utilisation de l'API Mistral Files et OCR) ---
+# --- Fonctions pour l'OCR et l'Upload ---
 @st.cache_data(show_spinner=False)
 def upload_pdf_to_mistral(_file_content, file_name):
-    """Uploads file content to Mistral AI for processing."""
     try:
         uploaded_pdf = client.files.upload(
             file={
@@ -74,7 +48,6 @@ def upload_pdf_to_mistral(_file_content, file_name):
 
 @st.cache_data(show_spinner=False)
 def get_signed_url(_file_id):
-    """Gets a signed URL for an uploaded file ID."""
     try:
         signed_url = client.files.get_signed_url(file_id=_file_id)
         st.success("URL signée pour l'OCR récupérée.")
@@ -85,7 +58,6 @@ def get_signed_url(_file_id):
 
 @st.cache_data(show_spinner=False)
 def call_ocr_api(_signed_url):
-    """Calls the Mistral OCR API to process the document via URL."""
     try:
         with st.spinner(f"Traitement OCR en cours avec le modèle '{OCR_MODEL}'..."):
             ocr_response = client.ocr.process(
@@ -102,9 +74,8 @@ def call_ocr_api(_signed_url):
         st.error(f"Erreur lors de l'appel de l'API OCR: {e}")
         return None
 
-# --- Fonction pour l'Extraction Structurée par IA (Utilisation de l'API Mistral Chat) ---
+# --- Fonction pour l'Extraction Structurée par IA ---
 def extract_info_with_llm(ocr_text):
-    """Uses a Mistral LLM to extract structured information from OCR text."""
     json_schema = {
       "report_info": {
         "lab_name": "string or null",
@@ -147,9 +118,9 @@ def extract_info_with_llm(ocr_text):
     You are an expert in analyzing laboratory food analysis reports (bulletins d'analyse).
     I will provide you with the full text extracted from such a report using OCR.
     The text may contain information from multiple pages, separated by '==NEW_PAGE=='.
-    Your primary task is to extract the key information and structure it into a JSON object based strictly on the following schema.
+    Your task is to extract the key information and structure it into a JSON object based strictly on the following schema.
 
-    Pay very close attention to the tables containing analysis results. You MUST extract EACH ROW from ALL analysis results tables into the 'analysis_results' array. Each object in the array should correspond to one row and contain the 'parameter', 'result', 'unit', 'specification', 'uncertainty', and 'method' columns as listed in the schema, extracting the value for that row.
+    Pay close attention to the tables containing analysis results. You MUST extract EACH ROW from ALL analysis results tables into the 'analysis_results' array. Each object in the array should correspond to one row and contain the 'parameter', 'result', 'unit', 'specification', 'uncertainty', and 'method' columns as listed in the schema, extracting the value for that row.
 
     Ensure the JSON output is strictly valid and only contains the JSON object within a markdown code block formatted as ````json__BLOCK_CODE_BLOCK_1__`json
     {{...}}
@@ -215,7 +186,6 @@ def extract_info_with_llm(ocr_text):
 
 # --- Helper function for Excel download ---
 def to_excel(df):
-    """Saves a DataFrame to an Excel file in memory."""
     output = BytesIO()
     try:
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -241,24 +211,20 @@ show_raw_ocr = st.sidebar.checkbox("Afficher le texte OCR brut", value=False)
 
 uploaded_file = st.file_uploader("📥 Choisissez un fichier PDF de bulletin d'analyse", type=["pdf"])
 
-extracted_data = None  # Variable pour stocker les données extraites par l'IA
+extracted_data = None
 
 if uploaded_file:
     st.write(f"Fichier sélectionné: **{uploaded_file.name}**")
 
-    # Lire le contenu du fichier une seule fois
     file_content = uploaded_file.getvalue()
 
-    # Step 1: Upload and OCR
     st.subheader("Étape 1: OCR du Document")
     file_id = upload_pdf_to_mistral(file_content, uploaded_file.name)
 
     if file_id:
-        # Step 1.1: Get Signed URL
         signed_url = get_signed_url(file_id)
 
         if signed_url:
-            # Step 1.2: Perform OCR
             ocr_result = call_ocr_api(signed_url)
 
             if ocr_result and ocr_result.pages:
@@ -266,18 +232,16 @@ if uploaded_file:
                     pages_text = [page.markdown for page in ocr_result.pages]
                     full_text = "\n\n==NEW_PAGE==\n\n".join(pages_text)
 
-                    # Display raw OCR text for debugging
-                    st.subheader("Texte OCR brut extrait")
-                    st.text(full_text)
+                    if show_raw_ocr:
+                        st.subheader("Texte OCR brut extrait")
+                        st.text(full_text)
 
-                    # Step 2: AI Extraction
                     st.subheader("Étape 2: Extraction des Informations Structurées par IA")
                     extracted_data = extract_info_with_llm(full_text)
 
                     if extracted_data:
                         st.subheader("Étape 3: Informations Extraites")
 
-                        # Display top-level info
                         st.markdown("#### Détails du Rapport, Client et Échantillon")
                         report_client_sample_info = {
                             "Laboratoire": extracted_data.get('report_info', {}).get('lab_name'),
@@ -305,7 +269,6 @@ if uploaded_file:
                         info_df = pd.DataFrame(info_df_data).set_index("Champ")
                         st.table(info_df)
 
-                        # Display analysis results in a DataFrame
                         st.markdown("#### Résultats d'Analyse Détaillés")
                         analysis_results = extracted_data.get('analysis_results')
 
@@ -317,7 +280,6 @@ if uploaded_file:
 
                                 st.dataframe(results_df, use_container_width=True)
 
-                                # Step 4: Download as Excel
                                 st.subheader("Étape 4: Télécharger les Résultats")
                                 excel_data = to_excel(results_df)
                                 if excel_data:
