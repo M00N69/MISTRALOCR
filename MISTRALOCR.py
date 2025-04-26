@@ -7,6 +7,22 @@ import pandas as pd
 from io import BytesIO
 import base64
 
+# Ajoutez ce bloc POUR DIAGNOSTIC
+import sys
+import importlib.metadata
+
+try:
+    mistralai_version = importlib.metadata.version("mistralai")
+    st.sidebar.info(f"Version de 'mistralai' détectée par l'application : {mistralai_version}")
+except importlib.metadata.PackageNotFoundError:
+    st.sidebar.error("'mistralai' n'est pas installé dans cet environnement.")
+except Exception as e:
+    st.sidebar.warning(f"Impossible de vérifier la version de 'mistralai' : {e}")
+
+st.sidebar.info(f"Chemin de l'exécutable Python : {sys.executable}")
+st.sidebar.info(f"Version de Python : {sys.version}")
+# Fin du bloc de diagnostic
+
 # --- Configuration ---
 
 # Utiliser st.secrets pour une gestion sécurisée des clés API
