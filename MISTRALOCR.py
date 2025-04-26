@@ -1,5 +1,5 @@
 import streamlit as st
-import requests  # Gardez si utilisé ailleurs
+import requests  # Keep if used elsewhere
 from mistralai import Mistral
 import os
 import json
@@ -18,8 +18,6 @@ st.set_page_config(page_title="Extracteur de Bulletins d'Analyse", layout="wide"
 try:
     # Utilisation directe de "API_KEY" si c'est le nom dans secrets.toml
     API_KEY = st.secrets.get("API_KEY")
-    # Si vous avez une section spécifique comme [mistral_api] et une clé API_KEY dedans:
-    # API_KEY = st.secrets.mistral_api.API_KEY # Exemple si secrets structurés
     if not API_KEY:
         st.error("Clé API Mistral non trouvée dans Streamlit Secrets (API_KEY). Assurez-vous qu'elle est définie.")
         st.stop()  # Arrête l'exécution si la clé API n'est pas trouvée
@@ -40,15 +38,12 @@ OCR_MODEL = "mistral-ocr-latest"
 LLM_MODEL = "mistral-large-latest"  # ou "mistral-medium-latest"
 
 # --- Bloc de diagnostic (Optionnel, peut être retiré une fois le problème résolu) ---
-# Ce bloc peut rester juste après les imports/configs initiales.
 import sys
 import importlib.metadata
 
-st.sidebar.title("Infos Diagnostic")  # Un appel Streamlit, mais dans la sidebar, c'est ok ici.
+st.sidebar.title("Infos Diagnostic")
 
 try:
-    # Tente de récupérer la version de mistralai
-    # importlib.metadata.version est dans la lib standard depuis Python 3.8
     mistralai_version = importlib.metadata.version("mistralai")
     st.sidebar.info(f"Version de 'mistralai' détectée : {mistralai_version}")
 except importlib.metadata.PackageNotFoundError:
@@ -56,16 +51,11 @@ except importlib.metadata.PackageNotFoundError:
 except Exception as e:
     st.sidebar.warning(f"Impossible de vérifier version 'mistralai' : {e}")
 
-# Affiche le chemin de l'exécutable Python et la version
-st.sidebar.info(f"Chemin Exécutable Python : \n`{sys.executable}`")  # Utilise Markdown pour chemin long
+st.sidebar.info(f"Chemin Exécutable Python : \n`{sys.executable}`")
 st.sidebar.info(f"Version Python : `{sys.version}`")
-# --- Fin du bloc de diagnostic ---
 
 # --- Fonctions pour l'OCR et l'Upload (Utilisation de l'API Mistral Files et OCR) ---
-# Ces fonctions peuvent être définies ici, après les configs initiales et les imports.
-# Leurs appels réels se feront plus tard dans le flux de l'application (après l'upload du fichier).
-
-@st.cache_data(show_spinner=False)  # Cache les résultats si le fichier est le même
+@st.cache_data(show_spinner=False)
 def upload_pdf_to_mistral(_file_content, file_name):
     """Uploads file content to Mistral AI for processing."""
     try:
@@ -82,7 +72,7 @@ def upload_pdf_to_mistral(_file_content, file_name):
         st.error(f"Erreur lors de l'upload du fichier à Mistral API: {e}")
         return None
 
-@st.cache_data(show_spinner=False)  # Cache les résultats
+@st.cache_data(show_spinner=False)
 def get_signed_url(_file_id):
     """Gets a signed URL for an uploaded file ID."""
     try:
@@ -93,7 +83,7 @@ def get_signed_url(_file_id):
         st.error(f"Erreur lors de la récupération de l'URL signée: {e}")
         return None
 
-@st.cache_data(show_spinner=False)  # Cache les résultats
+@st.cache_data(show_spinner=False)
 def call_ocr_api(_signed_url):
     """Calls the Mistral OCR API to process the document via URL."""
     try:
@@ -113,7 +103,6 @@ def call_ocr_api(_signed_url):
         return None
 
 # --- Fonction pour l'Extraction Structurée par IA (Utilisation de l'API Mistral Chat) ---
-
 def extract_info_with_llm(ocr_text):
     """Uses a Mistral LLM to extract structured information from OCR text."""
     json_schema = {
@@ -169,7 +158,7 @@ def extract_info_with_llm(ocr_text):
 
     try:
         with st.spinner(f"Analyse IA des résultats en cours avec le modèle '{LLM_MODEL}'..."):
-            chat_response = client.chat.complete(  # Corrected method name
+            chat_response = client.chat.complete(
                 model=LLM_MODEL,
                 messages=[
                     {"role": "user", "content": prompt}
@@ -193,10 +182,10 @@ def extract_info_with_llm(ocr_text):
                 if json_string.endswith("```"):
                     json_string = json_string[:-len("```")].strip()
             elif "```json" in response_content:
-                 start = response_content.find("```json") + len("```json")
-                 end = response_content.find("```", start)
-                 if start != -1 and end != -1:
-                     json_string = response_content[start:end].strip()
+                start = response_content.find("```json") + len("```json")
+                end = response_content.find("```", start)
+                if start != -1 and end != -1:
+                    json_string = response_content[start:end].strip()
 
             if json_string:
                 try:
@@ -207,16 +196,16 @@ def extract_info_with_llm(ocr_text):
                     st.text(response_content)
                     return None
             else:
-                 st.error("L'IA a généré une réponse inattendue qui ne contient pas de JSON valide ou un bloc markdown JSON.")
-                 st.text("Réponse brute de l'IA:")
-                 st.text(response_content)
-                 return None
+                st.error("L'IA a généré une réponse inattendue qui ne contient pas de JSON valide ou un bloc markdown JSON.")
+                st.text("Réponse brute de l'IA:")
+                st.text(response_content)
+                return None
 
         if not isinstance(extracted_data, dict):
-             st.error("L'IA n'a pas retourné un objet JSON de niveau supérieur valide.")
-             st.text("Réponse brute de l'IA:")
-             st.text(response_content)
-             return None
+            st.error("L'IA n'a pas retourné un objet JSON de niveau supérieur valide.")
+            st.text("Réponse brute de l'IA:")
+            st.text(response_content)
+            return None
 
         return extracted_data
 
@@ -225,7 +214,6 @@ def extract_info_with_llm(ocr_text):
         return None
 
 # --- Helper function for Excel download ---
-
 def to_excel(df):
     """Saves a DataFrame to an Excel file in memory."""
     output = BytesIO()
@@ -239,8 +227,6 @@ def to_excel(df):
         return None
 
 # --- Interface Streamlit Principale ---
-# Le corps principal de l'application commence ici, APRÈS les configs et définitions.
-
 st.title("🔬 Extracteur Automatisé de Bulletins d'Analyses (IA)")
 st.markdown("""
 Uploadez un fichier PDF de bulletin d'analyse. Cette application utilisera l'OCR de Mistral AI pour lire le document,
@@ -265,7 +251,7 @@ if uploaded_file:
 
     # Step 1: Upload and OCR
     st.subheader("Étape 1: OCR du Document")
-    file_id = upload_pdf_to_mistral(file_content, uploaded_file.name)  # Utilisez le contenu et le nom
+    file_id = upload_pdf_to_mistral(file_content, uploaded_file.name)
 
     if file_id:
         # Step 1.1: Get Signed URL
@@ -280,9 +266,9 @@ if uploaded_file:
                     pages_text = [page.markdown for page in ocr_result.pages]
                     full_text = "\n\n==NEW_PAGE==\n\n".join(pages_text)
 
-                    if show_raw_ocr:
-                        with st.expander("Voir le texte OCR brut extrait"):
-                            st.text(full_text)
+                    # Display raw OCR text for debugging
+                    st.subheader("Texte OCR brut extrait")
+                    st.text(full_text)
 
                     # Step 2: AI Extraction
                     st.subheader("Étape 2: Extraction des Informations Structurées par IA")
